@@ -1,0 +1,88 @@
+workflows:
+  ios_expo_prebuild_xcode:
+    name: "iOS (Expo prebuild → Xcode)"
+    max_build_duration: 60
+    environment:
+      vars:
+        # Настрой переменные в Codemagic → Settings → Environment variables (как Secret)
+        APP_BUNDLE_ID: com.alimastana.mytimers
+        IOS_SCHEME: My Timers   # ИМЯ схемы Xcode. После prebuild проверь и поправь при необходимости.
+      node: 20
+      xcode: 15.3
+      cocoapods: default
+    scripts:
+      - name: Show tool versions
+        script: |
+          node -v
+          npm -v
+          swift --version
+          xcodebuild -version
+
+      - name: Install NPM deps
+        script: |
+          npm ci
+
+      - name: Expo prebuild (iOS)
+        script: |
+          npx expo prebuild --platform ios --non-interactive --clean
+
+      - name: Install CocoaPods
+        script: |
+          cd ios
+          pod install
+          cd ..
+
+      - name: List Xcode schemes (проверь имя схемы)
+        script: |
+          xcodebuild -list -workspace ios/*.xcworkspace
+
+      - name: Archive (Xcode)
+        script: |
+          ARCHIVE_PATH="$CM_BUILD_DIR/ios_archive.xcarchive"
+          xcodebuild \
+            -workspace ios/*.xcworkspace \
+            -scheme "$IOS_SCHEME" \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            -allowProvisioningUpdates \
+            PRODUCT_BUNDLE_IDENTIFIER="$APP_BUNDLE_ID" \
+            archive
+
+      - name: Create exportOptions.plist
+        script: |
+          cat > exportOptions.plist <<EOF
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store</string>
+            <key>uploadSymbols</key><true/>
+            <key>compileBitcode</key><false/>
+            <key>destination</key><string>export</string>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Export IPA
+        script: |
+          ARCHIVE_PATH="$CM_BUILD_DIR/ios_archive.xcarchive"
+          EXPORT_PATH="$CM_BUILD_DIR/ipa"
+          mkdir -p "$EXPORT_PATH"
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportOptionsPlist exportOptions.plist \
+            -exportPath "$EXPORT_PATH" \
+            -allowProvisioningUpdates
+          ls -la "$EXPORT_PATH"
+
+    artifacts:
+      - $CM_BUILD_DIR/ipa/*.ipa
+
+    publishing:
+      app_store_connect:
+        # Включи публикацию, если хочешь сразу в TestFlight.
+        # Для этого добавь секреты: APP_STORE_CONNECT_API_KEY (.p8), APP_STORE_CONNECT_KEY_ID, APP_STORE_CONNECT_ISSUER_ID
+        auth: api_key
+        api_key: $APP_STORE_CONNECT_API_KEY
+        key_id: $APP_STORE_CONNECT_KEY_ID
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
