@@ -76,13 +76,3 @@ workflows:
 
     artifacts:
       - $CM_BUILD_DIR/ipa/*.ipa
-
-    publishing:
-      app_store_connect:
-        # Включи публикацию, если хочешь сразу в TestFlight.
-        # Для этого добавь секреты: APP_STORE_CONNECT_API_KEY (.p8), APP_STORE_CONNECT_KEY_ID, APP_STORE_CONNECT_ISSUER_ID
-        auth: api_key
-        api_key: $APP_STORE_CONNECT_API_KEY
-        key_id: $APP_STORE_CONNECT_KEY_ID
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-        submit_to_testflight: true
